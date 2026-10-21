@@ -318,7 +318,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
                 url = urlComponents.url!
             }
         }
-        logToConsole("Received URL from \(opener.application?.localizedName ?? "unknown application")")
+        logToConsole("Received URL from \(opener.application?.localizedName ?? "unknown application"): \(url.absoluteString)")
         shortUrlResolver.resolveUrl(url, callback: { (URL) -> Void in
             DispatchQueue.main.async {
                 self.callUrlHandlers(opener: opener, url: URL)
@@ -328,7 +328,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
 
     func callUrlHandlers(opener: Application, url: URL) {
         let launch: (URL, BrowserOpts) -> Void = { url, browser in
-            self.logToConsole("Launching \(browser.name)")
+            self.logToConsole("Launching \(browser.name) at: \(url.absoluteString)")
             openUrlWithBrowser(url, browserOpts: browser) { result in
                 let message: String
                 switch result {

@@ -116,7 +116,7 @@ If you are looking for something that lets you pick the browser to activate in a
 
 A browser object can use `appType: "command"` with an executable path in `command`. Finicky passes each configured `args` value separately, followed by the URL; no shell interpolation occurs.
 
-Commands run off the main thread with closed stdin and discarded stdout/stderr. A launcher must return within 15 seconds. Finicky terminates a stalled launcher, reports timeout/nonzero-exit/launch failure in its console, and remains available for other links. It never falls back to another browser automatically. Launcher diagnostics contain neither the URL nor command output.
+Commands run off the main thread with closed stdin and discarded stdout/stderr. A launcher must return within 15 seconds. Finicky terminates a stalled launcher, reports timeout/nonzero-exit/launch failure in its console, and remains available for other links. It never falls back to another browser automatically. The local console logs full incoming and routed URLs, including query strings that may contain OAuth secrets. Child command output is discarded; failure messages report status only.
 
 ## Building Finicky from source
 
