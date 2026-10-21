@@ -219,10 +219,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
 
-        textView.string = textView.string + dateString + " - " + message + "\n"
+        let entry = dateString + " - " + message + "\n"
+        let previous = String(textView.string.suffix(64 * 1024))
+        textView.string = previous + entry
         textView.scrollToEndOfDocument(self)
-        textView.isEditable = true
-        textView.checkTextInDocument(nil)
         textView.isEditable = false
     }
 
@@ -296,10 +296,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
 
     @objc func handleGetURLEvent(_ event: NSAppleEventDescriptor?, withReplyEvent _: NSAppleEventDescriptor?) {
         toggleDockIcon(showIcon: false)
-        let pid = event!.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))!.int32Value
-
-        let opener = Application(pid: pid)
-        var url = URL(string: event!.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))!.stringValue!)!
+        guard let event = event,
+              let sender = event.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr)),
+              let value = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              var url = URL(string: value) else {
+            logToConsole("Received an invalid URL event")
+            return
+        }
+        let opener = Application(pid: sender.int32Value)
 
         if url.scheme == "finicky" || url.scheme == "finickys" {
             if var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: true) {
@@ -314,29 +318,50 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSUserNotificationCenterDele
                 url = urlComponents.url!
             }
         }
-        logToConsole("Calling url handlers for url: \(url.absoluteString)")
+        logToConsole("Received URL from \(opener.application?.localizedName ?? "unknown application")")
         shortUrlResolver.resolveUrl(url, callback: { (URL) -> Void in
-            self.callUrlHandlers(opener: opener, url: URL)
+            DispatchQueue.main.async {
+                self.callUrlHandlers(opener: opener, url: URL)
+            }
         })
     }
 
     func callUrlHandlers(opener: Application, url: URL) {
+        let launch: (URL, BrowserOpts) -> Void = { url, browser in
+            self.logToConsole("Launching \(browser.name)")
+            openUrlWithBrowser(url, browserOpts: browser) { result in
+                let message: String
+                switch result {
+                case .exited(0):
+                    self.logToConsole("\(browser.name) launcher completed")
+                    return
+                case .exited(let status):
+                    message = "\(browser.name) command exited with status \(status)"
+                case .timedOut:
+                    message = "\(browser.name) command timed out after 15 seconds"
+                case .launchFailed:
+                    message = "Unable to launch \(browser.name) command"
+                }
+                self.logToConsole(message)
+                showNotification(title: "Browser launch failed", informativeText: message, error: true)
+            }
+        }
         if let appDescriptor = configLoader.determineOpeningApp(url: url, opener: opener) {
             if let appToStart = getActiveApp(browsers: appDescriptor.browsers) {
                 var success = false
                 if let bundleId = appToStart.bundleId {
                     logToConsole("Bundle id: \(bundleId)")
                     if NSWorkspace.shared.absolutePathForApplication(withBundleIdentifier: bundleId) != nil {
-                        openUrlWithBrowser(appDescriptor.url, browserOpts: appToStart)
+                        launch(appDescriptor.url, appToStart)
                         success = true
                     }
                 } else if appToStart.command != nil {
-                    openUrlWithBrowser(appDescriptor.url, browserOpts: appToStart)
+                    launch(appDescriptor.url, appToStart)
                     success = true
                 } else if let appPath = appToStart.appPath {
                     logToConsole("App path: \(appPath)")
                     if BrowserOpts.isAppDirectory(appPath) {
-                        openUrlWithBrowser(appDescriptor.url, browserOpts: appToStart)
+                        launch(appDescriptor.url, appToStart)
                         success = true
                     }
                 }

@@ -112,6 +112,12 @@ See the wiki page for other [configuration tips](https://github.com/johnste/fini
 
 If you are looking for something that lets you pick the browser to activate in a graphical interface, check out [Browserosaurus](https://browserosaurus.com/) by Will Stone, an open source browser prompter for macOS. It works really well together with Finicky!
 
+## Custom commands
+
+A browser object can use `appType: "command"` with an executable path in `command`. Finicky passes each configured `args` value separately, followed by the URL; no shell interpolation occurs.
+
+Commands run off the main thread with closed stdin and discarded stdout/stderr. A launcher must return within 15 seconds. Finicky terminates a stalled launcher, reports timeout/nonzero-exit/launch failure in its console, and remains available for other links. It never falls back to another browser automatically. Launcher diagnostics contain neither the URL nor command output.
+
 ## Building Finicky from source
 
 If you'd like to build Finicky from source, you can do so by installing Xcode, Xcode Command Line Tools, and yarn, and then running the following:

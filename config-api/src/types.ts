@@ -116,7 +116,7 @@ export type Browser = string | BrowserObject;
 /**
  * Represents the type of app to start. "None" means to not start any app.
  */
-export type AppType = "appName" | "bundleId" | "appPath" | "none";
+export type AppType = "appName" | "bundleId" | "appPath" | "command" | "none";
 
 /**
  * Represents a browser or app to open
@@ -126,6 +126,7 @@ export interface BrowserObject {
   appType?: AppType;
   openInBackground?: boolean;
   profile?: string;
+  command?: string;
   args?: string[];
 }
 

@@ -15,6 +15,66 @@ struct Fixture<T: Decodable & Equatable> {
 }
 
 class FinickyUnitTests: XCTestCase {
+    func test_commandDoesNotBlockMainThread() {
+        let completed = expectation(description: "command completed")
+        let responsive = expectation(description: "main queue remains responsive")
+        let started = Date()
+        shell(["/bin/sleep", "0.3"]) { result in
+            XCTAssertEqual(result, .exited(0))
+            XCTAssertTrue(Thread.isMainThread)
+            completed.fulfill()
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 0.1)
+        DispatchQueue.main.async { responsive.fulfill() }
+        wait(for: [responsive], timeout: 0.2)
+        wait(for: [completed], timeout: 2)
+    }
+
+    func test_commandTimeoutKillsOnlyItsOwnProcess() {
+        let completed = expectation(description: "hung command timed out")
+        let concurrent = expectation(description: "another command still completes")
+        shell(["/usr/bin/perl", "-e", "$SIG{TERM} = 'IGNORE'; sleep 20;"], timeout: 0.2) { result in
+            XCTAssertEqual(result, .timedOut)
+            completed.fulfill()
+        }
+        shell(["/usr/bin/true"]) { result in
+            XCTAssertEqual(result, .exited(0))
+            concurrent.fulfill()
+        }
+        wait(for: [concurrent], timeout: 0.2)
+        wait(for: [completed], timeout: 2)
+    }
+
+    func test_commandFailureAndLargeOutputAreHandled() {
+        let failed = expectation(description: "command failure")
+        let missing = expectation(description: "executable could not launch")
+        let noisy = expectation(description: "large output does not deadlock")
+        shell(["/finicky-nonexistent-executable"]) { result in
+            XCTAssertEqual(result, .launchFailed)
+            missing.fulfill()
+        }
+        shell(["/usr/bin/env", "finicky-nonexistent-command"]) { result in
+            XCTAssertEqual(result, .exited(127))
+            failed.fulfill()
+        }
+        shell(["/usr/bin/perl", "-e", "print 'x' x 262144; print STDERR 'y' x 262144;"]) { result in
+            XCTAssertEqual(result, .exited(0))
+            noisy.fulfill()
+        }
+        wait(for: [failed, missing, noisy], timeout: 3)
+    }
+
+    func test_customCommandReceivesArgumentsAndURLSeparately() throws {
+        let browser = try BrowserOpts(
+            name: "Test command", appType: .command, openInBackground: false,
+            profile: nil, command: "/tmp/test command", args: ["--flag", "argument with spaces"]
+        )
+        let url = try XCTUnwrap(URL(string: "https://example.test/?literal=one%20two"))
+        XCTAssertEqual(getBrowserCommand(browser, url: url), [
+            "/tmp/test command", "--flag", "argument with spaces", url.absoluteString,
+        ])
+    }
+
     func testRewrite() {
         XCTAssertEqual(try compareVersions("1.2.3", "0.9"), ComparisonResult.orderedDescending)
         XCTAssertEqual(try compareVersions("1.9.3", "0.9"), ComparisonResult.orderedDescending)

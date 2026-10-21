@@ -46,11 +46,6 @@ public struct BrowserOpts: CustomStringConvertible {
     ) throws {
         self.name = name
         if openInBackground == nil {
-            // Open the browser in the background depending on if Finicky recieved focus
-            // But we need to sleep for a few millisconds to attempt to work around focus issue
-            // See https://github.com/johnste/finicky/issues/126
-            usleep(120 * 1000)
-
             self.openInBackground = !NSApplication.shared.isActive
         } else {
             self.openInBackground = openInBackground!

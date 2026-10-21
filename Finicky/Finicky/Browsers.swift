@@ -28,9 +28,9 @@ public func getActiveApp(browsers: [BrowserOpts]) -> BrowserOpts? {
     return browsers.first
 }
 
-public func openUrlWithBrowser(_ url: URL, browserOpts: BrowserOpts) {
+public func openUrlWithBrowser(_ url: URL, browserOpts: BrowserOpts, completion: @escaping (CommandResult) -> Void) {
     let command = getBrowserCommand(browserOpts, url: url)
-    shell(command)
+    shell(command, completion: completion)
 }
 
 // keep all browser bundle IDs lowercase
@@ -58,13 +58,10 @@ public func getBrowserCommand(_ browserOpts: BrowserOpts, url: URL) -> [String] 
     var appendUrl = true
 
     // command takes priority over appPath, bundleId and openInBackground
-    if browserOpts.command != nil {
-        command.append(browserOpts.command!)
-        command.append(contentsOf: commandArgs)
-        command.append(url.absoluteString)
-        return command
+    if let executable = browserOpts.command {
+        return [executable] + browserOpts.args + [url.absoluteString]
     } else {
-        command.append("open")
+        command.append("/usr/bin/open")
     }
 
     // appPath takes priority over bundleId as it is always unique.
