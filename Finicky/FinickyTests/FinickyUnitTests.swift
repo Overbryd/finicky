@@ -75,6 +75,56 @@ class FinickyUnitTests: XCTestCase {
         ])
     }
 
+    func test_sensitiveCommandReceivesURLOnPrivateStdinNotArguments() throws {
+        let browser = try BrowserOpts(
+            name: "Private command", appType: .command, openInBackground: false,
+            profile: nil, command: "/usr/bin/perl", args: ["-e", "local $/; my $input=<STDIN>; exit(($input eq 'https://example.test/?secret=synthetic' && @ARGV == 0) ? 0 : 7);"],
+            urlTransport: "stdin"
+        )
+        let url = try XCTUnwrap(URL(string: "https://example.test/?secret=synthetic"))
+        XCTAssertFalse(getBrowserCommand(browser, url: url).contains(url.absoluteString))
+        let completed = expectation(description: "private URL consumed")
+        openUrlWithBrowser(url, browserOpts: browser) { result in
+            XCTAssertEqual(result, .exited(0))
+            completed.fulfill()
+        }
+        wait(for: [completed], timeout: 3)
+    }
+
+    func test_privateStdinRejectsOversizeAndCannotDeadlockOnUnreadInput() {
+        let oversized = expectation(description: "oversize input rejected")
+        shell(["/usr/bin/true"], input: Data(repeating: 65, count: 16385)) { result in
+            XCTAssertEqual(result, .launchFailed)
+            oversized.fulfill()
+        }
+        let unread = expectation(description: "unread bounded input times out")
+        shell(["/bin/sleep", "20"], input: Data(repeating: 65, count: 16384), timeout: 0.2) { result in
+            XCTAssertEqual(result, .timedOut)
+            unread.fulfill()
+        }
+        wait(for: [oversized, unread], timeout: 3)
+    }
+
+    func test_invalidURLTransportFailsClosed() {
+        XCTAssertThrowsError(try BrowserOpts(name: "command", appType: .command, openInBackground: false,
+            profile: nil, command: "/usr/bin/true", args: [], urlTransport: "environment"))
+        XCTAssertThrowsError(try BrowserOpts(name: "Safari", appType: .appName, openInBackground: false,
+            profile: nil, command: nil, args: [], urlTransport: "stdin"))
+    }
+
+    func test_zscalerURLLoggingNeverIncludesAuthorizationMaterial() throws {
+        for (value, source) in [
+            ("https://samlsp.private.zscaler.com/auth?token=synthetic#secret", "unknown"),
+            ("https://login.example.test/path?SAMLRequest=synthetic", "com.zscaler.zscaler"),
+            ("zsa://token?value=synthetic", "unknown"),
+        ] {
+            let url = try XCTUnwrap(URL(string: value))
+            XCTAssertEqual(urlForLogging(url, sourceBundleId: source), "[private Zscaler URL]")
+        }
+        let ordinary = try XCTUnwrap(URL(string: "https://example.test/?ordinary=value"))
+        XCTAssertEqual(urlForLogging(ordinary, sourceBundleId: "ordinary"), ordinary.absoluteString)
+    }
+
     func testRewrite() {
         XCTAssertEqual(try compareVersions("1.2.3", "0.9"), ComparisonResult.orderedDescending)
         XCTAssertEqual(try compareVersions("1.9.3", "0.9"), ComparisonResult.orderedDescending)

@@ -25,6 +25,7 @@ public struct BrowserOpts: CustomStringConvertible {
     public var profile: String?
     public var command: String?
     public var args: [String]
+    public var urlTransport: String
 
     public var description: String {
         if let bundleId = self.bundleId {
@@ -42,8 +43,13 @@ public struct BrowserOpts: CustomStringConvertible {
         openInBackground: Bool?,
         profile: String?,
         command: String?,
-        args: [String]
+        args: [String],
+        urlTransport: String = "argv"
     ) throws {
+        guard ["argv", "stdin"].contains(urlTransport),
+              urlTransport != "stdin" || (appType == .command && command?.hasPrefix("/") == true)
+        else { throw BrowserError.cantFindBrowser(msg: "Invalid private URL transport") }
+        self.urlTransport = urlTransport
         self.name = name
         if openInBackground == nil {
             self.openInBackground = !NSApplication.shared.isActive

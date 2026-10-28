@@ -42,15 +42,19 @@ export function processUrl(
   };
 
   if (config?.options?.logRequests) {
+    const privateRequest = options.sourceBundleIdentifier?.toLowerCase() === "com.zscaler.zscaler"
+      || options.url.host?.toLowerCase() === "samlsp.private.zscaler.com"
+      || options.url.protocol?.toLowerCase().replace(":", "") === "zsa";
+    const loggedUrl = privateRequest ? "[private Zscaler URL]" : url;
     if (processOptions?.opener) {
       const app = processOptions.opener;
       finicky.log(
-        `Opening ${url} from ${app.name || "N/A"}\n\tbundleId: ${
+        `Opening ${loggedUrl} from ${app.name || "N/A"}\n\tbundleId: ${
           app.bundleId || "N/A"
         }\n\tpath: ${app.path || "N/A"}`
       );
     } else {
-      finicky.log(`Opening ${url} from an unknown application`);
+      finicky.log(`Opening ${loggedUrl} from an unknown application`);
     }
   }
 

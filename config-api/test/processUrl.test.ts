@@ -3,6 +3,32 @@ import { processUrl } from "../src/processUrl";
 import { createAPI } from "../src/createAPI";
 import { Url, UrlFunction } from "../src/types";
 
+describe("Private authorization URL transport", () => {
+  beforeAll(() => {
+    // @ts-ignore
+    global.finickyInternalAPI = { getKeys: () => ({shift:false, option:false, command:false, control:false, capsLock:false, function:false}) };
+  });
+  test("retains stdin transport through browser resolution", () => {
+    // @ts-ignore
+    global.finicky = createAPI();
+    const result = processUrl({defaultBrowser: {name: "Private helper", appType: "command", command: "/usr/bin/helper", urlTransport: "stdin"}},
+      "https://example.test/?secret=synthetic", processOptions);
+    expect(result.browsers[0].urlTransport).toBe("stdin");
+  });
+
+  test("redacts Zscaler request logging even when logRequests is enabled", () => {
+    // @ts-ignore
+    global.finicky = createAPI();
+    // @ts-ignore
+    const logger = jest.spyOn(global.finicky, "log").mockImplementation(() => {});
+    processUrl({defaultBrowser: "Safari", options: {logRequests: true}},
+      "https://samlsp.private.zscaler.com/?token=synthetic", processOptions);
+    expect(logger.mock.calls.flat().join(" ")).not.toContain("synthetic");
+    expect(logger.mock.calls.flat().join(" ")).toContain("[private Zscaler URL]");
+    logger.mockRestore();
+  });
+});
+
 const createRewriteConfig = ({
   urlResult = "https://test.changed",
   match = () => true,

@@ -127,6 +127,8 @@ export interface BrowserObject {
   openInBackground?: boolean;
   profile?: string;
   command?: string;
+  /** Private stdin avoids exposing authorization URLs in process arguments. */
+  urlTransport?: "argv" | "stdin";
   args?: string[];
 }
 

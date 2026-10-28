@@ -6,11 +6,12 @@ public enum CommandResult: Equatable {
     case launchFailed
 }
 
-func shell(_ args: [String], timeout: TimeInterval = 15, completion: @escaping (CommandResult) -> Void) {
+func shell(_ args: [String], input: Data? = nil, timeout: TimeInterval = 15, completion: @escaping (CommandResult) -> Void) {
     DispatchQueue.global(qos: .userInitiated).async {
         let task = Process()
         let finished = DispatchSemaphore(value: 0)
-        guard let executable = args.first, !executable.isEmpty else {
+        guard input == nil || input!.count <= 16384,
+              let executable = args.first, !executable.isEmpty else {
             DispatchQueue.main.async { completion(.launchFailed) }
             return
         }
@@ -21,7 +22,27 @@ func shell(_ args: [String], timeout: TimeInterval = 15, completion: @escaping (
             task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             task.arguments = args
         }
-        task.standardInput = FileHandle.nullDevice
+        // A small unlinked private file avoids a blocked pipe writer when a
+        // launcher never reads stdin. No URL enters argv, environment or logs.
+        var privateInput: FileHandle?
+        if let input = input {
+            var template = Array((NSTemporaryDirectory() + "finicky-input-XXXXXX").utf8CString)
+            let fd = mkstemp(&template)
+            guard fd >= 0 else {
+                DispatchQueue.main.async { completion(.launchFailed) }
+                return
+            }
+            unlink(template)
+            privateInput = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+            let written = input.withUnsafeBytes { bytes in Darwin.write(fd, bytes.baseAddress, bytes.count) }
+            guard written == input.count, lseek(fd, 0, SEEK_SET) == 0 else {
+                privateInput?.closeFile()
+                DispatchQueue.main.async { completion(.launchFailed) }
+                return
+            }
+        }
+        defer { privateInput?.closeFile() }
+        task.standardInput = privateInput ?? FileHandle.nullDevice
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         task.terminationHandler = { _ in finished.signal() }
@@ -47,6 +68,15 @@ func shell(_ args: [String], timeout: TimeInterval = 15, completion: @escaping (
         task.terminationHandler = nil
         DispatchQueue.main.async { completion(result) }
     }
+}
+
+func urlForLogging(_ url: URL, sourceBundleId: String?) -> String {
+    if sourceBundleId?.lowercased() == "com.zscaler.zscaler"
+        || url.scheme?.lowercased() == "zsa"
+        || url.host?.lowercased() == "samlsp.private.zscaler.com" {
+        return "[private Zscaler URL]"
+    }
+    return url.absoluteString
 }
 
 func loadJS(_ path: String) -> String {

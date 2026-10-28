@@ -30,7 +30,8 @@ public func getActiveApp(browsers: [BrowserOpts]) -> BrowserOpts? {
 
 public func openUrlWithBrowser(_ url: URL, browserOpts: BrowserOpts, completion: @escaping (CommandResult) -> Void) {
     let command = getBrowserCommand(browserOpts, url: url)
-    shell(command, completion: completion)
+    let input = browserOpts.urlTransport == "stdin" ? Data(url.absoluteString.utf8) : nil
+    shell(command, input: input, completion: completion)
 }
 
 // keep all browser bundle IDs lowercase
@@ -59,7 +60,7 @@ public func getBrowserCommand(_ browserOpts: BrowserOpts, url: URL) -> [String] 
 
     // command takes priority over appPath, bundleId and openInBackground
     if let executable = browserOpts.command {
-        return [executable] + browserOpts.args + [url.absoluteString]
+        return [executable] + browserOpts.args + (browserOpts.urlTransport == "stdin" ? [] : [url.absoluteString])
     } else {
         command.append("/usr/bin/open")
     }

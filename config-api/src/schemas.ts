@@ -38,6 +38,7 @@ const browserSchema = validate.oneOf([
     openInBackground: validate.boolean,
     profile: validate.string,
     command: validate.string,
+    urlTransport: validate.oneOf([validate.value("argv"), validate.value("stdin")]),
     args: validate.arrayOf(validate.string),
   }),
   validate.function("options"),
@@ -108,5 +109,6 @@ export const appDescriptorSchema = {
   openInBackground: validate.boolean,
   profile: validate.string,
   command: validate.string,
+  urlTransport: validate.oneOf([validate.value("argv"), validate.value("stdin")]),
   args: validate.arrayOf(validate.string),
 };
